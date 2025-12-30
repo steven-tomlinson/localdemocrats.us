@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>National Democratic County Data Explorer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f8fafc;
+            color: #0f172a;
+        }
+
+        .chart-container {
+            position: relative;
+            width: 100%;
+            max-width: 600px;
+            margin-left: auto;
+            margin-right: auto;
+            height: 300px;
+            max-height: 350px;
+        }
+
+        .data-table-container {
+            max-height: 600px;
+            overflow-y: auto;
+        }
+
+        .status-badge {
+            font-size: 0.7rem;
+            font-weight: 700;
+            padding: 2px 8px;
+            border-radius: 9999px;
+            text-transform: uppercase;
+        }
+
+        .status-verified {
+            background-color: #dcfce7;
+            color: #166534;
+        }
+
+        .status-inactive {
+            background-color: #fee2e2;
+            color: #991b1b;
+        }
+
+        .status-semi {
+            background-color: #fef9c3;
+            color: #854d0e;
+        }
+
+        /* Custom scrollbar for table */
+        .data-table-container::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .data-table-container::-webkit-scrollbar-track {
+            background: #f1f5f9;
+        }
+
+        .data-table-container::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 10px;
+        }
+    </style>
+</head>
+
+<body class="flex flex-col min-h-screen">
+
+    <!-- Chosen Palette: "Democracy Deep Blue" - Slate-50 background, Blue-700/800 primary, Emerald/Rose for status. Professional and trustworthy. -->
+
+    <!-- Application Structure Plan: 
+     1. Navigation/Header: Branding and global actions (Search & Export).
+     2. Stats Dashboard: High-level overview of the data health (Verified vs Inactive) using Chart.js.
+     3. Data Explorer: The core spreadsheet component with interactive filtering and sorting.
+     4. Detail Sidebar/Panel: Contextual information about state parties and leaders.
+     The structure is optimized for data-heavy tasks, prioritizing visibility of the spreadsheet while providing analytical context.
+-->
+
+    <!-- Navigation -->
+    <header class="bg-blue-900 text-white shadow-md sticky top-0 z-50">
+        <div
+            class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex flex-col md:flex-row justify-between items-center gap-4">
+            <div class="flex items-center space-x-3">
+                <div class="bg-white text-blue-900 p-2 rounded-lg font-bold text-xl shadow-sm">D</div>
+                <div>
+                    <h1 class="text-lg font-bold leading-tight">National Democratic Directory</h1>
+                    <p class="text-xs text-blue-200">Infrastructure Analysis & Spreadsheet Tool</p>
+                </div>
+            </div>
+            <div class="flex items-center space-x-2 w-full md:w-auto">
+                <div class="relative flex-grow">
+                    <input type="text" id="global-search" placeholder="Search state or county..."
+                        class="w-full bg-blue-800 text-white placeholder-blue-300 border border-blue-700 rounded-md py-2 px-4 focus:outline-none focus:ring-2 focus:ring-blue-400 text-sm">
+                </div>
+                <!-- <button onclick="exportToCSV()"
+                    class="bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-semibold py-2 px-4 rounded-md transition shadow-lg flex items-center shrink-0">
+                    <span>Export CSV</span>
+                </button> -->
+            </div>
+        </div>
+    </header>
+
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full flex-grow">
+
+        <!-- Summary Section -->
+        <div class="mb-10 grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <div class="lg:col-span-1 bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                <h3 class="text-sm font-bold text-slate-500 uppercase tracking-wider mb-4">Infrastructure Status</h3>
+                <p class="text-xs text-slate-400 mb-6">Aggregate view of verified vs. unorganized county units across
+                    the 2024-2025 cycle.</p>
+                <div class="chart-container">
+                    <canvas id="statusChart"></canvas>
+                </div>
+            </div>
+
+            <div
+                class="lg:col-span-2 bg-white p-6 rounded-xl shadow-sm border border-slate-200 flex flex-col justify-between">
+                <div>
+                    <h3 class="text-sm font-bold text-slate-500 uppercase tracking-wider mb-4">Operational Insights</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                        <div class="bg-slate-50 p-4 rounded-lg border border-slate-100">
+                            <span class="block text-2xl font-bold text-blue-700" id="stat-states">0</span>
+                            <span class="text-xs text-slate-500 font-medium">States/Territories</span>
+                        </div>
+                        <div class="bg-slate-50 p-4 rounded-lg border border-slate-100">
+                            <span class="block text-2xl font-bold text-emerald-600" id="stat-counties">0</span>
+                            <span class="text-xs text-slate-500 font-medium">Verified Units</span>
+                        </div>
+                        <div class="bg-slate-50 p-4 rounded-lg border border-slate-100">
+                            <span class="block text-2xl font-bold text-rose-600" id="stat-inactive">0</span>
+                            <span class="text-xs text-slate-500 font-medium">Inactive/Vacant</span>
+                        </div>
+                    </div>
+                    <div class="text-sm text-slate-600 leading-relaxed">
+                        <p class="mb-3">This data explorer translates the "Federation of 57" analysis into an actionable
+                            dataset. By isolating statutory bodies from unofficial groups, it provides a clean
+                            operational map of grassroots party strength.</p>
+                        <div class="flex flex-wrap gap-2 mt-4">
+                            <span
+                                class="bg-blue-50 text-blue-700 px-2 py-1 rounded text-[10px] font-bold border border-blue-100">ASDC
+                                ALIGNED</span>
+                            <span
+                                class="bg-blue-50 text-blue-700 px-2 py-1 rounded text-[10px] font-bold border border-blue-100">DNC
+                                VERIFIED</span>
+                            <span
+                                class="bg-blue-50 text-blue-700 px-2 py-1 rounded text-[10px] font-bold border border-blue-100">2024-2025
+                                CYCLE</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Data Explorer Table -->
+        <div class="bg-white rounded-xl shadow-md border border-slate-200 overflow-hidden">
+            <div
+                class="bg-slate-50 border-b border-slate-200 px-6 py-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <h2 class="text-lg font-bold text-slate-800">County Directory Dataset</h2>
+                <div class="flex items-center space-x-4">
+                    <select id="state-filter"
+                        class="bg-white border border-slate-300 text-slate-700 text-xs rounded-md p-2 focus:ring-blue-500 outline-none">
+                        <option value="all">All States</option>
+                    </select>
+                    <span class="text-xs text-slate-400" id="record-count">Showing 0 records</span>
+                </div>
+            </div>
+
+            <div class="data-table-container">
+                <table class="w-full text-left border-collapse min-w-[800px]" id="directory-table">
+                    <thead class="bg-slate-50 sticky top-0 z-10">
+                        <tr>
+                            <th class="px-6 py-3 border-b border-slate-200 text-xs font-bold text-slate-500 uppercase cursor-pointer hover:text-blue-600"
+                                onclick="sortTable(0)">State ↕</th>
+                            <th class="px-6 py-3 border-b border-slate-200 text-xs font-bold text-slate-500 uppercase cursor-pointer hover:text-blue-600"
+                                onclick="sortTable(1)">County/Parish ↕</th>
+                            <th class="px-6 py-3 border-b border-slate-200 text-xs font-bold text-slate-500 uppercase">
+                                Status</th>
+                            <th class="px-6 py-3 border-b border-slate-200 text-xs font-bold text-slate-500 uppercase">
+                                Primary Contact / Leader</th>
+                            <th class="px-6 py-3 border-b border-slate-200 text-xs font-bold text-slate-500 uppercase">
+                                Operational Notes</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-100" id="table-body">
+                        <!-- Data Rows Injected Here -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </main>
+
+    <footer class="bg-slate-900 text-slate-500 py-8 border-t border-slate-800 mt-12">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+            <p class="text-xs uppercase font-bold tracking-widest text-slate-400 mb-2">National Democratic County
+                Directory Builder</p>
+            <p class="text-[10px]">Data extracted from Report a9c83a24. This application is for infrastructure analysis
+                and research purposes.</p>
+        </div>
+    </footer>
+
+    <!-- JS Logic & Data Storage -->
+    <script>
+        // Visualization & Content Choices:
+        // Report Info -> Dataset -> Table -> Interaction: Sort/Filter -> Justification: High density of data requires rapid filtering.
+        // Confirming NO SVG used. Chart.js used for the doughnut chart.
+
+        const rawData = [
+            // Alabama
+            { state: 'Alabama', county: 'Autauga', status: 'Verified', leader: 'n/a', notes: 'Active Executive Committee structure.' },
+            { state: 'Alabama', county: 'Baldwin', status: 'Verified', leader: 'n/a', notes: 'Coastal county; significant population growth.' },
+            { state: 'Alabama', county: 'Barbour', status: 'Verified', leader: 'n/a', notes: 'Rural focus.' },
+            { state: 'Alabama', county: 'Bibb', status: 'Verified', leader: 'n/a', notes: 'Statutory footprint maintained.' },
+            { state: 'Alabama', county: 'Blount', status: 'Verified', leader: 'n/a', notes: 'Recognized organizational structure.' },
+            { state: 'Alabama', county: 'Bullock', status: 'Verified', leader: 'n/a', notes: 'Active outside metro areas.' },
+            { state: 'Alabama', county: 'Butler', status: 'Verified', leader: 'n/a', notes: 'Verified committee structure.' },
+            { state: 'Alabama', county: 'Calhoun', status: 'Verified', leader: 'n/a', notes: 'Active organization in Anniston area.' },
+
+            // Arkansas
+            { state: 'Arkansas', county: 'Boone', status: 'Verified', leader: 'Sherry Bishop, Wanda Evans', notes: 'Elected State Committee Reps.' },
+            { state: 'Arkansas', county: 'Bradley', status: 'Verified', leader: 'Drew Pritt, Greg Reep', notes: 'Elected State Committee Reps.' },
+            { state: 'Arkansas', county: 'Calhoun', status: 'Verified', leader: 'Gus McRae, Betty Leonard', notes: 'Elected State Committee Reps.' },
+            { state: 'Arkansas', county: 'Carroll', status: 'Verified', leader: 'Jean Reed, Doug Hausler, Suzie Bell', notes: 'Elected State Committee Reps.' },
+            { state: 'Arkansas', county: 'Clark', status: 'Verified', leader: 'LaShunna Hart, Claudia Beach', notes: 'Elected State Committee Reps.' },
+            { state: 'Arkansas', county: 'Faulkner', status: 'Verified', leader: 'Tina Haggard, Betty Pickett', notes: 'Multiple active officers listed.' },
+            { state: 'Arkansas', county: 'Garland', status: 'Verified', leader: 'Lee Crawford, Karen Garcia', notes: 'Elected State Committee Reps.' },
+            { state: 'Arkansas', county: 'Pike', status: 'Verified', leader: 'Mary Padgett, John Gould', notes: 'Functional rural infrastructure.' },
+
+            // Florida
+            { state: 'Florida', county: 'Hardee', status: 'Inactive', leader: 'n/a', notes: 'Instructs users to "Contact FDP to organize".' },
+            { state: 'Florida', county: 'Hendry', status: 'Verified', leader: 'Keith Ritcher', notes: 'Verified operational contact.' },
+
+            // Georgia
+            { state: 'Georgia', county: 'Harris', status: 'Verified', leader: 'n/a', notes: 'Utilizes modern SMS opt-in systems.' },
+
+            // Louisiana
+            { state: 'Louisiana', county: 'Acadia Parish', status: 'Semi-Active', leader: 'Bobby Boudreaux, Jerrl Thompson', notes: 'Significant vacancies in Districts 1-8.' },
+            { state: 'Louisiana', county: 'Ascension Parish', status: 'Verified', leader: 'Cleveland A. Washington (Chair)', notes: 'Full DPEC officer slate verified.' },
+            { state: 'Louisiana', county: 'Allen Parish', status: 'Inactive', leader: 'n/a', notes: 'Total vacancy in Districts and At-Large seats.' },
+
+            // Mississippi
+            { state: 'Mississippi', county: 'Adams', status: 'Verified', leader: 'Angela B. Brooks', notes: 'Verified County Chair.' },
+            { state: 'Mississippi', county: 'Jasper', status: 'Verified', leader: 'Marcelean Arrington', notes: 'Verified County Chair.' },
+            { state: 'Mississippi', county: 'Jefferson', status: 'Verified', leader: 'Albert Z. Johnson', notes: 'Verified County Chair.' },
+            { state: 'Mississippi', county: 'Jones', status: 'Verified', leader: 'Shuanita', notes: 'Verified County Chair.' },
+
+            // New Jersey
+            { state: 'New Jersey', county: 'Atlantic', status: 'Verified', leader: 'Michael Suleiman', notes: 'Elected State Committee members.' },
+            { state: 'New Jersey', county: 'Bergen', status: 'Verified', leader: 'Ken Corcoran, Maria Sarlo', notes: 'Large committee body (10+ members).' },
+            { state: 'New Jersey', county: 'Camden', status: 'Verified', leader: 'Stephen Ayscue', notes: 'Elected State Committee members.' },
+            { state: 'New Jersey', county: 'Essex', status: 'Verified', leader: 'Christopher Durkin', notes: 'Active county infrastructure.' },
+
+            // New York
+            { state: 'New York', county: 'Albany', status: 'Verified', leader: 'Jake Crawford', notes: 'Verified County Chair.' },
+            { state: 'New York', county: 'Bronx', status: 'Verified', leader: 'Jamaal Bailey', notes: 'Verified County Chair.' },
+            { state: 'New York', county: 'Broome', status: 'Verified', leader: 'Sarah Dinofer', notes: 'Verified County Chair.' },
+
+            // Rhode Island
+            { state: 'Rhode Island', county: 'Cranston City', status: 'Verified', leader: 'Maria Quezada', notes: 'Verified City Chair.' },
+            { state: 'Rhode Island', county: 'Coventry Town', status: 'Verified', leader: 'Richard Kalunian', notes: 'Verified Town Chair.' },
+
+            // Vermont
+            { state: 'Vermont', county: 'Middlebury', status: 'Verified', leader: 'n/a', notes: 'Active reorganization playbook in use.' },
+            { state: 'Vermont', county: 'Vergennes', status: 'Verified', leader: 'n/a', notes: 'Active Addison County unit.' },
+
+            // South Dakota
+            { state: 'South Dakota', county: 'Aurora', status: 'Inactive', leader: 'n/a', notes: 'Listed as Vacant in state directory.' },
+            { state: 'South Dakota', county: 'Beadle', status: 'Verified', leader: 'Peggy Gibson (Chair)', notes: 'Active leadership reported.' },
+            { state: 'South Dakota', county: 'Buffalo', status: 'Inactive', leader: 'n/a', notes: 'Listed as Vacant in state directory.' },
+            { state: 'South Dakota', county: 'Clay', status: 'Verified', leader: 'Leslie Gerrish', notes: 'Active leadership reported.' },
+
+            // Colorado
+            { state: 'Colorado', county: 'Adams', status: 'Verified', leader: 'Lori Goldstein', notes: 'Benchmark transparency; Co-Chair model.' },
+            { state: 'Colorado', county: 'Denver', status: 'Verified', leader: 'James Reyes', notes: 'Active metropolitan infrastructure.' },
+            { state: 'Colorado', county: 'Pueblo', status: 'Verified', leader: 'Bri Buentello', notes: 'Active Southern Colorado unit.' },
+            { state: 'Colorado', county: 'Weld', status: 'Verified', leader: 'Bev Wallace', notes: 'Active Northern Colorado unit.' },
+            { state: 'Colorado', county: 'Baca', status: 'Inactive', leader: 'n/a', notes: 'Vacancy noted in Eastern Plains.' },
+
+            // Hawaii
+            { state: 'Hawaii', county: 'Hawaii (Dist Hilo)', status: 'Verified', leader: 'Tina Holt', notes: 'Granular district-level subdivision.' },
+            { state: 'Hawaii', county: 'Hawaii (Dist Kohala)', status: 'Verified', leader: 'Frank Even', notes: 'Granular district-level subdivision.' },
+
+            // Montana
+            { state: 'Montana', county: 'Cascade', status: 'Verified', leader: 'n/a', notes: 'Active regional board oversight.' },
+            { state: 'Montana', county: 'Custer', status: 'Verified', leader: 'n/a', notes: 'Active regional board oversight.' }
+        ];
+
+        let currentSort = { column: 0, direction: 'asc' };
+
+        function init() {
+            populateFilters();
+            renderTable();
+            updateStats();
+            initChart();
+
+            document.getElementById('global-search').addEventListener('input', renderTable);
+            document.getElementById('state-filter').addEventListener('change', renderTable);
+        }
+
+        function populateFilters() {
+            const stateSelect = document.getElementById('state-filter');
+            const states = [...new Set(rawData.map(d => d.state))].sort();
+            states.forEach(state => {
+                const opt = document.createElement('option');
+                opt.value = state;
+                opt.textContent = state;
+                stateSelect.appendChild(opt);
+            });
+        }
+
+        function getFilteredData() {
+            const query = document.getElementById('global-search').value.toLowerCase();
+            const stateFilter = document.getElementById('state-filter').value;
+
+            return rawData.filter(d => {
+                const matchesQuery = d.state.toLowerCase().includes(query) || d.county.toLowerCase().includes(query) || d.leader.toLowerCase().includes(query);
+                const matchesState = stateFilter === 'all' || d.state === stateFilter;
+                return matchesQuery && matchesState;
+            }).sort((a, b) => {
+                const cols = ['state', 'county', 'status', 'leader', 'notes'];
+                const valA = a[cols[currentSort.column]].toLowerCase();
+                const valB = b[cols[currentSort.column]].toLowerCase();
+                if (currentSort.direction === 'asc') return valA > valB ? 1 : -1;
+                return valA < valB ? 1 : -1;
+            });
+        }
+
+        function renderTable() {
+            const data = getFilteredData();
+            const tbody = document.getElementById('table-body');
+            const countSpan = document.getElementById('record-count');
+
+            tbody.innerHTML = '';
+            countSpan.textContent = `Showing ${data.length} records`;
+
+            data.forEach(row => {
+                const tr = document.createElement('tr');
+                tr.className = "hover:bg-slate-50 transition-colors";
+
+                const statusClass = row.status === 'Verified' ? 'status-verified' :
+                    row.status === 'Inactive' ? 'status-inactive' : 'status-semi';
+
+                tr.innerHTML = `
+                <td class="px-6 py-4 text-sm font-semibold text-slate-700">${row.state}</td>
+                <td class="px-6 py-4 text-sm text-slate-600">${row.county}</td>
+                <td class="px-6 py-4 text-sm"><span class="status-badge ${statusClass}">${row.status}</span></td>
+                <td class="px-6 py-4 text-sm text-slate-600 font-medium">${row.leader}</td>
+                <td class="px-6 py-4 text-xs text-slate-500 italic">${row.notes}</td>
+            `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function sortTable(n) {
+            if (currentSort.column === n) {
+                currentSort.direction = currentSort.direction === 'asc' ? 'desc' : 'asc';
+            } else {
+                currentSort.column = n;
+                currentSort.direction = 'asc';
+            }
+            renderTable();
+        }
+
+        function updateStats() {
+            const states = new Set(rawData.map(d => d.state)).size;
+            const verified = rawData.filter(d => d.status === 'Verified').length;
+            const inactive = rawData.filter(d => d.status === 'Inactive').length;
+
+            document.getElementById('stat-states').textContent = states;
+            document.getElementById('stat-counties').textContent = verified;
+            document.getElementById('stat-inactive').textContent = inactive;
+        }
+
+        function initChart() {
+            const verified = rawData.filter(d => d.status === 'Verified').length;
+            const inactive = rawData.filter(d => d.status === 'Inactive').length;
+            const semi = rawData.filter(d => d.status === 'Semi-Active').length;
+
+            const ctx = document.getElementById('statusChart').getContext('2d');
+            new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Verified', 'Inactive/Vacant', 'Semi-Active'],
+                    datasets: [{
+                        data: [verified, inactive, semi],
+                        backgroundColor: ['#10b981', '#ef4444', '#f59e0b'],
+                        hoverOffset: 4,
+                        borderWidth: 0
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    cutout: '70%',
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: {
+                                font: { size: 10, weight: 'bold' },
+                                usePointStyle: true,
+                                padding: 20
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        function exportToCSV() {
+            const data = getFilteredData();
+            const headers = ["State", "County/Parish", "Status", "Leader", "Notes"];
+            const rows = data.map(d => [d.state, d.county, d.status, d.leader, d.notes]);
+
+            let csvContent = "data:text/csv;charset=utf-8,"
+                + headers.join(",") + "\n"
+                + rows.map(e => e.map(cell => `"${cell.replace(/"/g, '""')}"`).join(",")).join("\n");
+
+            const encodedUri = encodeURI(csvContent);
+            const link = document.createElement("a");
+            link.setAttribute("href", encodedUri);
+            link.setAttribute("download", `National_Democratic_Directory_Export_${new Date().toISOString().split('T')[0]}.csv`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        window.onload = init;
+    </script>
+
+    <!-- CONFIRMATION: NO SVG used. NO Mermaid JS used. -->
+</body>
+
+</html>
